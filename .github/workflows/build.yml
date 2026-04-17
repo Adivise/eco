@@ -61,7 +61,7 @@ jobs:
 
       - name: Build
         if: steps.sync.outputs.has_update == 'true'
-        run: ./gradlew build shadowJar --no-daemon
+        run: ./gradlew build
 
       - name: Create Release
         if: steps.sync.outputs.has_update == 'true'
