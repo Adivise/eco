@@ -77,6 +77,6 @@ jobs:
           name: ${{ steps.version.outputs.name }}
           files: build/libs/*-all.jar
           body: |
-            Auto-generated build from upstream release tag ${{ steps.version.outputs.tag }}.
+            Auto-generated build from upstream release tag v${{ steps.version.outputs.tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
