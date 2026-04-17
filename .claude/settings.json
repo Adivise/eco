@@ -1,9 +1,0 @@
-{
-  "enabledPlugins": {
-    "superpowers@claude-plugins-official": true
-  },
-  "attribution": {
-    "commit": "",
-    "pr": ""
-  }
-}

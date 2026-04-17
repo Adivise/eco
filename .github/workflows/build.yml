@@ -6,7 +6,7 @@ on:
     - cron: '0 */2 * * *'
 
 jobs:
-  auto-build-and-release:
+  release:
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -56,7 +56,7 @@ jobs:
         run: |
           VERSION=$(grep '^version' gradle.properties | cut -d'=' -f2 | tr -d ' ' | tr -d '\r')
           echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "tag=$VERSION-auto-build" >> $GITHUB_OUTPUT
+          echo "tag=$VERSION" >> $GITHUB_OUTPUT
           echo "name=$VERSION (Auto Build)" >> $GITHUB_OUTPUT
 
       - name: Build
