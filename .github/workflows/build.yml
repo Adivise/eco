@@ -63,6 +63,18 @@ jobs:
         if: steps.sync.outputs.has_update == 'true'
         run: ./gradlew clean shadowJar --no-daemon
 
+      - name: Add stable download filename
+        if: steps.sync.outputs.has_update == 'true'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          jars=(build/libs/eco-*-all.jar)
+          if [ "${#jars[@]}" -ne 1 ]; then
+            echo "Expected exactly one eco-*-all.jar, got: ${jars[*]-none}"
+            exit 1
+          fi
+          cp "${jars[0]}" build/libs/eco-all.jar
+
       - name: Verify artifact
         if: steps.sync.outputs.has_update == 'true'
         run: |
@@ -75,8 +87,64 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.name }}
-          files: build/libs/*-all.jar
+          files: |
+            build/libs/eco-*-all.jar
+            build/libs/eco-all.jar
           body: |
-            Auto-generated build from upstream release tag ${{ steps.version.outputs.tag }}.
+            Auto-generated build from upstream release tag v${{ steps.version.outputs.tag }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Optional: repo secret DISCORD_WEBHOOK_URL — Incoming Webhook URL from Discord channel settings.
+      - name: Notify Discord
+        if: steps.sync.outputs.has_update == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          VERSION: ${{ steps.version.outputs.tag }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "Skipping Discord (set repository secret DISCORD_WEBHOOK_URL to enable)."
+            exit 0
+          fi
+          python3 << 'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          version = os.environ["VERSION"]
+          repo = os.environ["REPO"]
+          base = f"https://github.com/{repo}"
+          dl_stable = f"{base}/releases/latest/download/eco-all.jar"
+          dl_versioned = f"{base}/releases/download/{version}/eco-{version}-all.jar"
+          release = f"{base}/releases/tag/{version}"
+
+          payload = {
+              "username": "Auto Build",
+              "embeds": [
+                  {
+                      "title": f"eco {version}",
+                      "description": (
+                          f"**Download (one-click)** — [eco-all.jar]({dl_stable})\n"
+                          f"**Versioned file** — [eco-{version}-all.jar]({dl_versioned})\n"
+                          f"**Release** — {release}"
+                      ),
+                      "color": 5763719,
+                  }
+              ],
+          }
+          data = json.dumps(payload).encode("utf-8")
+          req = urllib.request.Request(
+              os.environ["DISCORD_WEBHOOK_URL"],
+              data=data,
+              headers={"Content-Type": "application/json"},
+              method="POST",
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  if resp.status not in (200, 204):
+                      raise SystemExit(f"Discord webhook HTTP {resp.status}")
+          except urllib.error.HTTPError as e:
+              raise SystemExit(f"Discord webhook failed: {e.code} {e.read().decode(errors='replace')}") from e
+          PY
