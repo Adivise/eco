@@ -15,6 +15,7 @@ git remote add upstream "$UPSTREAM_URL" 2>/dev/null || true
 # Do not fetch tags: upstream uses bare semver tags (7.2.2). Having them locally makes
 # "git push" try to update refs/tags/7.2.2 on the fork (clobber / rejected).
 git fetch origin --no-tags
+git remote set-head origin -a 2>/dev/null || true
 git fetch upstream --no-tags
 
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
@@ -24,7 +25,24 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   done < <(git tag -l)
 fi
 
-DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')"
+# Avoid $(git … | sed …) under pipefail: if symbolic-ref fails the whole pipeline fails.
+DEFAULT_BRANCH=""
+origin_head_ref="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || true)"
+if [ -n "$origin_head_ref" ]; then
+  DEFAULT_BRANCH="${origin_head_ref#refs/remotes/origin/}"
+fi
+if [ -z "$DEFAULT_BRANCH" ]; then
+  for cand in main master trunk; do
+    if git rev-parse "refs/remotes/origin/${cand}" >/dev/null 2>&1; then
+      DEFAULT_BRANCH="$cand"
+      break
+    fi
+  done
+fi
+if [ -z "$DEFAULT_BRANCH" ]; then
+  echo "Could not determine origin default branch (no origin/HEAD and no origin/main|master)."
+  exit 1
+fi
 echo "default_branch=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
 
 UPSTREAM_DEFAULT="$(git ls-remote --symref upstream HEAD | awk '/^ref:/ {sub(/^refs\/heads\//, "", $2); print $2; exit}')"
