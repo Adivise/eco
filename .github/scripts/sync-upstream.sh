@@ -91,18 +91,45 @@ if [ -z "$PV" ]; then
 fi
 echo "gradle_version=$PV" >> "$GITHUB_OUTPUT"
 
-if [ -z "$OLD_VER" ] || [ "$PV" != "$OLD_VER" ]; then
-  TAG_NAME="v${PV}"
-  RELEASE_NAME="${PV} (Auto Build)"
-  KIND="auto"
-else
-  MAX_R=0
-  for t in $(git tag -l "v${PV}-rebuild-*"); do
+# Upstream uses bare semver tags (e.g. 7.2.2). We use v7.2.2 for releases but must avoid
+# clobbering an existing v7.2.2 on origin (rerun, manual release, or duplicate workflow).
+tag_exists() {
+  local name="$1"
+  if git rev-parse "$name^{}" >/dev/null 2>&1; then
+    return 0
+  fi
+  if git ls-remote --tags origin "refs/tags/$name" 2>/dev/null | grep -q .; then
+    return 0
+  fi
+  return 1
+}
+
+next_rebuild_suffix() {
+  local pv="$1"
+  local max_r=0
+  local t n
+  for t in $(git tag -l "v${pv}-rebuild-*"); do
     n="${t##*-rebuild-}"
     case "$n" in ''|*[!0-9]*) continue ;; esac
-    if [ "$n" -gt "$MAX_R" ]; then MAX_R="$n"; fi
+    if [ "$n" -gt "$max_r" ]; then max_r="$n"; fi
   done
-  NEXT_R=$((MAX_R + 1))
+  echo $((max_r + 1))
+}
+
+if [ -z "$OLD_VER" ] || [ "$PV" != "$OLD_VER" ]; then
+  if tag_exists "v${PV}"; then
+    NEXT_R="$(next_rebuild_suffix "$PV")"
+    TAG_NAME="v${PV}-rebuild-${NEXT_R}"
+    RELEASE_NAME="${PV} (Re-Build-${NEXT_R})"
+    KIND="rebuild"
+    echo "Note: tag v${PV} already exists; using ${TAG_NAME} for this release."
+  else
+    TAG_NAME="v${PV}"
+    RELEASE_NAME="${PV} (Auto Build)"
+    KIND="auto"
+  fi
+else
+  NEXT_R="$(next_rebuild_suffix "$PV")"
   TAG_NAME="v${PV}-rebuild-${NEXT_R}"
   RELEASE_NAME="${PV} (Re-Build-${NEXT_R})"
   KIND="rebuild"

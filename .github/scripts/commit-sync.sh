@@ -11,5 +11,5 @@ if [ "$HAS_UPDATE" = "pointer" ]; then
 else
   git commit -m "chore: sync upstream (${UPSTREAM_SHA})" || { git status; exit 1; }
 fi
-git push origin "HEAD:${DEFAULT_BRANCH}"
+git push origin "HEAD:${DEFAULT_BRANCH}" --no-tags
 echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
