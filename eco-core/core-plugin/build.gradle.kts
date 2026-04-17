@@ -75,11 +75,7 @@ dependencies {
 
 tasks {
     shadowJar {
-        minimize {
-            exclude(dependency("org.jetbrains.exposed:.*:.*"))
-            exclude(dependency("org.mariadb.jdbc:.*:.*"))
-            exclude(dependency("com.willfp:ModelEngineBridge:.*"))
-        }
+        // Removed minimize to fix runtime errors and match original build size.
     }
 
     processResources {
