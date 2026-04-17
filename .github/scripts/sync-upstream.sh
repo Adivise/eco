@@ -9,10 +9,20 @@ UPSTREAM_URL="${UPSTREAM_URL:-https://github.com/Auxilor/eco.git}"
 
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git config user.name "github-actions[bot]"
+git config push.followTags false
 
 git remote add upstream "$UPSTREAM_URL" 2>/dev/null || true
-git fetch origin --tags
-git fetch upstream --tags
+# Do not fetch tags: upstream uses bare semver tags (7.2.2). Having them locally makes
+# "git push" try to update refs/tags/7.2.2 on the fork (clobber / rejected).
+git fetch origin --no-tags
+git fetch upstream --no-tags
+
+if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
+  while IFS= read -r t; do
+    [ -z "$t" ] && continue
+    git tag -d "$t" 2>/dev/null || true
+  done < <(git tag -l)
+fi
 
 DEFAULT_BRANCH="$(git symbolic-ref refs/remotes/origin/HEAD | sed 's@^refs/remotes/origin/@@')"
 echo "default_branch=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
@@ -91,28 +101,26 @@ if [ -z "$PV" ]; then
 fi
 echo "gradle_version=$PV" >> "$GITHUB_OUTPUT"
 
-# Upstream uses bare semver tags (e.g. 7.2.2). We use v7.2.2 for releases but must avoid
-# clobbering an existing v7.2.2 on origin (rerun, manual release, or duplicate workflow).
+# Release tags use v-prefix (v7.2.2) to avoid clashing with upstream's bare tags (7.2.2).
 tag_exists() {
-  local name="$1"
-  if git rev-parse "$name^{}" >/dev/null 2>&1; then
-    return 0
-  fi
-  if git ls-remote --tags origin "refs/tags/$name" 2>/dev/null | grep -q .; then
-    return 0
-  fi
-  return 1
+  git ls-remote --tags origin "refs/tags/$1" 2>/dev/null | grep -q .
 }
 
 next_rebuild_suffix() {
   local pv="$1"
+  local prefix="v${pv}-rebuild-"
   local max_r=0
-  local t n
-  for t in $(git tag -l "v${pv}-rebuild-*"); do
-    n="${t##*-rebuild-}"
+  local _sha ref tag n
+  while IFS=$'\t' read -r _sha ref; do
+    [ -z "$ref" ] && continue
+    tag="${ref#refs/tags/}"
+    case "$tag" in
+      "${prefix}"[0-9]*) n="${tag#"$prefix"}" ;;
+      *) continue ;;
+    esac
     case "$n" in ''|*[!0-9]*) continue ;; esac
     if [ "$n" -gt "$max_r" ]; then max_r="$n"; fi
-  done
+  done < <(git ls-remote --tags origin 2>/dev/null | grep -F "refs/tags/${prefix}" || true)
   echo $((max_r + 1))
 }
 

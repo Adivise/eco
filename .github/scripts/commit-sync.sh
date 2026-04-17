@@ -11,5 +11,9 @@ if [ "$HAS_UPDATE" = "pointer" ]; then
 else
   git commit -m "chore: sync upstream (${UPSTREAM_SHA})" || { git status; exit 1; }
 fi
-git push origin "HEAD:${DEFAULT_BRANCH}" --no-tags
+
+# Never push tags with the branch: avoids clobbering fork tags (e.g. upstream-style 7.2.2).
+git config push.followTags false
+git -c push.followTags=false push origin "HEAD:refs/heads/${DEFAULT_BRANCH}" --no-tags
+
 echo "head_sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
