@@ -29,8 +29,8 @@ jobs:
             exit 1
           fi
 
-          if git rev-parse -q --verify "refs/tags/$UPSTREAM_TAG" > /dev/null; then
-            echo "Latest upstream tag ($UPSTREAM_TAG) already exists locally. Skipping build and release."
+          if git ls-remote --exit-code --tags origin "refs/tags/$UPSTREAM_TAG" > /dev/null 2>&1; then
+            echo "Latest upstream tag ($UPSTREAM_TAG) already exists on origin. Skipping build and release."
             echo "has_update=false" >> $GITHUB_OUTPUT
           else
             echo "Building latest upstream tag: $UPSTREAM_TAG"
@@ -57,7 +57,7 @@ jobs:
           VERSION="${{ steps.sync.outputs.upstream_tag }}"
           echo "VERSION=$VERSION" >> $GITHUB_ENV
           echo "tag=$VERSION" >> $GITHUB_OUTPUT
-          echo "name=$VERSION (Auto Build from upstream tag)" >> $GITHUB_OUTPUT
+          echo "name=$VERSION (Auto Build)" >> $GITHUB_OUTPUT
 
       - name: Build
         if: steps.sync.outputs.has_update == 'true'
