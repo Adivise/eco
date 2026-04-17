@@ -1,0 +1,77 @@
+name: Sync, Build and Release
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 */2 * * *'
+
+jobs:
+  auto-build-and-release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check and Sync with upstream
+        id: sync
+        run: |
+          git config --global user.name 'github-actions[bot]'
+          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
+          git remote add upstream https://github.com/Auxilor/eco.git || true
+          git fetch upstream
+          
+          LOCAL_HASH=$(git rev-parse HEAD)
+          UPSTREAM_HASH=$(git rev-parse upstream/master)
+          
+          if [ "$LOCAL_HASH" == "$UPSTREAM_HASH" ]; then
+            echo "No updates found from upstream. Skipping build and release."
+            echo "has_update=false" >> $GITHUB_OUTPUT
+          else
+            echo "Updates found! Syncing..."
+            git checkout master
+            git merge upstream/master --no-edit || true
+            git push origin master
+            echo "has_update=true" >> $GITHUB_OUTPUT
+          fi
+        
+      - name: Set up JDK 21
+        if: steps.sync.outputs.has_update == 'true'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: 21
+
+      - name: Setup Gradle cache
+        if: steps.sync.outputs.has_update == 'true'
+        uses: gradle/actions/setup-gradle@v3
+
+      - name: Get Project Version
+        id: version
+        if: steps.sync.outputs.has_update == 'true'
+        run: |
+          VERSION=$(grep '^version' gradle.properties | cut -d'=' -f2 | tr -d ' ' | tr -d '\r')
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+          echo "tag=$VERSION-auto-build" >> $GITHUB_OUTPUT
+          echo "name=$VERSION (Auto Build)" >> $GITHUB_OUTPUT
+
+      - name: Build
+        if: steps.sync.outputs.has_update == 'true'
+        run: ./gradlew build shadowJar --no-daemon
+
+      - name: Create Release
+        if: steps.sync.outputs.has_update == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.name }}
+          files: build/libs/*.jar
+          body: |
+            Auto-generated build synced from the upstream repository.
+            Version: ${{ env.VERSION }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
