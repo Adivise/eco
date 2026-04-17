@@ -69,7 +69,7 @@ jobs:
         with:
           tag_name: ${{ steps.version.outputs.tag }}
           name: ${{ steps.version.outputs.name }}
-          files: build/libs/*.jar
+          files: build/libs/*-all.jar
           body: |
             Auto-generated build synced from the upstream repository.
             Version: ${{ env.VERSION }}
