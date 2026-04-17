@@ -8,7 +8,7 @@ version = rootProject.version
 dependencies {
     implementation(project(":eco-core:core-nms:common"))
     implementation(project(":eco-core:core-nms:modern"))
-    implementation(project(":eco-core:core-nms:v1_21_6"))
+    implementation(project(":eco-core:core-nms:v1_21_6", configuration = "shadow"))
     paperweight.paperDevBundle("1.21.11-R0.1-SNAPSHOT")
 }
 

@@ -61,7 +61,7 @@ jobs:
 
       - name: Build
         if: steps.sync.outputs.has_update == 'true'
-        run: ./gradlew shadowJar
+        run: ./gradlew build
 
       - name: Create Release
         if: steps.sync.outputs.has_update == 'true'
@@ -72,6 +72,5 @@ jobs:
           files: build/libs/*-all.jar
           body: |
             Auto-generated build synced from the upstream repository.
-            Version: ${{ env.VERSION }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
