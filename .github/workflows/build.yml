@@ -70,3 +70,35 @@ jobs:
             Auto-generated build from upstream Auxilor/eco @ ${{ steps.sync.outputs.upstream_sha }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Notify Discord
+        if: success() && steps.sync.outputs.run_build == 'true'
+        env:
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          REL_NAME: ${{ steps.sync.outputs.release_name }}
+          TAG_NAME: ${{ steps.sync.outputs.tag_name }}
+          UP_SHA: ${{ steps.sync.outputs.upstream_sha }}
+        run: |
+          if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
+            echo "DISCORD_WEBHOOK_URL secret not set; skipping Discord."
+            exit 0
+          fi
+          rel_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"
+          jq -n \
+            --arg title "eco — ${REL_NAME}" \
+            --arg url "$rel_url" \
+            --arg tag "$TAG_NAME" \
+            --arg sha "$UP_SHA" \
+            --arg rep "$GITHUB_REPOSITORY" \
+            '{
+              embeds: [{
+                title: $title,
+                url: $url,
+                color: 5814783,
+                fields: [
+                  { name: "Tag", value: $tag, inline: true },
+                  { name: "Upstream SHA", value: $sha, inline: false }
+                ],
+                footer: { text: ("GitHub Actions · " + $rep) }
+              }]
+            }' | curl -fsS -X POST -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"
