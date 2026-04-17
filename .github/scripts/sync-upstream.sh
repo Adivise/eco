@@ -56,7 +56,8 @@ NEW_SHA="$(git rev-parse "upstream/${UPSTREAM_DEFAULT}")"
 echo "upstream_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
 
 SYNC_CONTENT="$(git show "origin/${DEFAULT_BRANCH}:.upstream-sync" 2>/dev/null || true)"
-OLD_SHA="$(printf '%s\n' "$SYNC_CONTENT" | grep '^UPSTREAM_SHA=' | head -1 | cut -d= -f2- | tr -d '\r' | tr -d ' ')"
+# Under pipefail, grep exits 1 when there is no match (first run / no .upstream-sync yet).
+OLD_SHA="$(printf '%s\n' "$SYNC_CONTENT" | grep '^UPSTREAM_SHA=' | head -1 | cut -d= -f2- | tr -d '\r' | tr -d ' ')" || OLD_SHA=""
 
 OLD_VER="$(git show "origin/${DEFAULT_BRANCH}:gradle.properties" 2>/dev/null | grep -E '^version[[:space:]]*=' | head -1 | sed 's/^[^=]*=[[:space:]]*//;s/[[:space:]]*$//;s/#.*//' || true)"
 
