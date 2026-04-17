@@ -68,7 +68,5 @@ jobs:
           files: build/libs/*-all.jar
           body: |
             Auto-generated build from upstream Auxilor/eco @ ${{ steps.sync.outputs.upstream_sha }}
-
-            ${{ steps.sync.outputs.build_kind == 'rebuild' && '- **Kind:** rebuild (same gradle.properties version)' || '- **Kind:** version sync (Auto Build)' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

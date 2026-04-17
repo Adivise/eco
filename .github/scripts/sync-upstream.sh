@@ -10,10 +10,7 @@ UPSTREAM_URL="${UPSTREAM_URL:-https://github.com/Auxilor/eco.git}"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git config user.name "github-actions[bot]"
 git config push.followTags false
-
 git remote add upstream "$UPSTREAM_URL" 2>/dev/null || true
-# Do not fetch tags: upstream uses bare semver tags (7.2.2). Having them locally makes
-# "git push" try to update refs/tags/7.2.2 on the fork (clobber / rejected).
 git fetch origin --no-tags
 git remote set-head origin -a 2>/dev/null || true
 git fetch upstream --no-tags
@@ -25,7 +22,6 @@ if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   done < <(git tag -l)
 fi
 
-# Avoid $(git … | sed …) under pipefail: if symbolic-ref fails the whole pipeline fails.
 DEFAULT_BRANCH=""
 origin_head_ref="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || true)"
 if [ -n "$origin_head_ref" ]; then
@@ -56,7 +52,7 @@ NEW_SHA="$(git rev-parse "upstream/${UPSTREAM_DEFAULT}")"
 echo "upstream_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
 
 SYNC_CONTENT="$(git show "origin/${DEFAULT_BRANCH}:.upstream-sync" 2>/dev/null || true)"
-# Under pipefail, grep exits 1 when there is no match (first run / no .upstream-sync yet).
+
 OLD_SHA="$(printf '%s\n' "$SYNC_CONTENT" | grep '^UPSTREAM_SHA=' | head -1 | cut -d= -f2- | tr -d '\r' | tr -d ' ')" || OLD_SHA=""
 
 OLD_VER="$(git show "origin/${DEFAULT_BRANCH}:gradle.properties" 2>/dev/null | grep -E '^version[[:space:]]*=' | head -1 | sed 's/^[^=]*=[[:space:]]*//;s/[[:space:]]*$//;s/#.*//' || true)"
@@ -120,7 +116,6 @@ if [ -z "$PV" ]; then
 fi
 echo "gradle_version=$PV" >> "$GITHUB_OUTPUT"
 
-# Release tags use v-prefix (v7.2.2) to avoid clashing with upstream's bare tags (7.2.2).
 tag_exists() {
   git ls-remote --tags origin "refs/tags/$1" 2>/dev/null | grep -q .
 }
@@ -147,7 +142,7 @@ if [ -z "$OLD_VER" ] || [ "$PV" != "$OLD_VER" ]; then
   if tag_exists "v${PV}"; then
     NEXT_R="$(next_rebuild_suffix "$PV")"
     TAG_NAME="v${PV}-rebuild-${NEXT_R}"
-    RELEASE_NAME="${PV} (Re-Build-${NEXT_R})"
+    RELEASE_NAME="${PV} (Rebuild-${NEXT_R})"
     KIND="rebuild"
     echo "Note: tag v${PV} already exists; using ${TAG_NAME} for this release."
   else
@@ -158,7 +153,7 @@ if [ -z "$OLD_VER" ] || [ "$PV" != "$OLD_VER" ]; then
 else
   NEXT_R="$(next_rebuild_suffix "$PV")"
   TAG_NAME="v${PV}-rebuild-${NEXT_R}"
-  RELEASE_NAME="${PV} (Re-Build-${NEXT_R})"
+  RELEASE_NAME="${PV} (Rebuild-${NEXT_R})"
   KIND="rebuild"
 fi
 
