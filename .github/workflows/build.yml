@@ -5,6 +5,10 @@ on:
   schedule:
     - cron: '0 */2 * * *'
 
+concurrency:
+  group: auto-build-${{ github.repository }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -17,66 +21,53 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve latest upstream tag
+      - name: Sync from upstream (changed files only)
         id: sync
-        run: |
-          git remote add upstream https://github.com/Auxilor/eco.git || true
-          git fetch upstream --tags
+        env:
+          UPSTREAM_URL: https://github.com/Auxilor/eco.git
+        run: bash .github/scripts/sync-upstream.sh
 
-          UPSTREAM_TAG=$(git ls-remote --refs --tags upstream | awk -F/ '{print $3}' | sort -V | tail -n1)
-          if [ -z "$UPSTREAM_TAG" ]; then
-            echo "Could not resolve upstream tag."
-            exit 1
-          fi
-
-          if git ls-remote --exit-code --tags origin "refs/tags/$UPSTREAM_TAG" > /dev/null 2>&1; then
-            echo "Latest upstream tag ($UPSTREAM_TAG) already exists on origin. Skipping build and release."
-            echo "has_update=false" >> $GITHUB_OUTPUT
-          else
-            echo "Building latest upstream tag: $UPSTREAM_TAG"
-            git checkout --detach "tags/$UPSTREAM_TAG"
-            echo "has_update=true" >> $GITHUB_OUTPUT
-            echo "upstream_tag=$UPSTREAM_TAG" >> $GITHUB_OUTPUT
-          fi
-        
       - name: Set up JDK 21
-        if: steps.sync.outputs.has_update == 'true'
+        if: steps.sync.outputs.run_build == 'true'
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: 21
 
       - name: Setup Gradle cache
-        if: steps.sync.outputs.has_update == 'true'
+        if: steps.sync.outputs.run_build == 'true'
         uses: gradle/actions/setup-gradle@v3
 
-      - name: Get Project Version
-        id: version
-        if: steps.sync.outputs.has_update == 'true'
-        run: |
-          VERSION="${{ steps.sync.outputs.upstream_tag }}"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
-          echo "tag=$VERSION" >> $GITHUB_OUTPUT
-          echo "name=$VERSION (Auto Build)" >> $GITHUB_OUTPUT
-
       - name: Build
-        if: steps.sync.outputs.has_update == 'true'
+        if: steps.sync.outputs.run_build == 'true'
         run: ./gradlew clean shadowJar --no-daemon
 
       - name: Verify artifact
-        if: steps.sync.outputs.has_update == 'true'
+        if: steps.sync.outputs.run_build == 'true'
         run: |
           ls -lh build/libs/*-all.jar
           sha256sum build/libs/*-all.jar
 
+      - name: Commit sync and push
+        id: publish
+        if: steps.sync.outputs.has_update == 'true' || steps.sync.outputs.has_update == 'pointer'
+        env:
+          DEFAULT_BRANCH: ${{ steps.sync.outputs.default_branch }}
+          HAS_UPDATE: ${{ steps.sync.outputs.has_update }}
+          UPSTREAM_SHA: ${{ steps.sync.outputs.upstream_sha }}
+        run: bash .github/scripts/commit-sync.sh
+
       - name: Create Release
-        if: steps.sync.outputs.has_update == 'true'
+        if: steps.sync.outputs.run_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.version.outputs.tag }}
-          name: ${{ steps.version.outputs.name }}
+          tag_name: ${{ steps.sync.outputs.tag_name }}
+          name: ${{ steps.sync.outputs.release_name }}
+          target_commitish: ${{ steps.publish.outputs.head_sha }}
           files: build/libs/*-all.jar
           body: |
-            Auto-generated build from upstream release tag v${{ steps.version.outputs.tag }}
+            Auto-generated build from upstream Auxilor/eco @ ${{ steps.sync.outputs.upstream_sha }}
+
+            ${{ steps.sync.outputs.build_kind == 'rebuild' && '- **Kind:** rebuild (same gradle.properties version)' || '- **Kind:** version sync (Auto Build)' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
