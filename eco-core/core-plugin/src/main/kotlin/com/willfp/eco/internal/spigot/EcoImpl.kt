@@ -4,7 +4,6 @@ import com.willfp.eco.core.Eco
 import com.willfp.eco.core.EcoPlugin
 import com.willfp.eco.core.PluginLike
 import com.willfp.eco.core.PluginProps
-import com.willfp.eco.core.blocks.Blocks
 import com.willfp.eco.core.command.CommandBase
 import com.willfp.eco.core.command.PluginCommandBase
 import com.willfp.eco.core.config.ConfigType
@@ -239,17 +238,13 @@ class EcoImpl : EcoSpigotPlugin(), Eco {
             }
         }
 
-        for (customBlock in Blocks.getCustomBlocks()) {
-            if (customBlock.key.namespace.equals(plugin.name.lowercase(), ignoreCase = true)) {
-                Blocks.removeCustomBlock(customBlock.key)
-            }
-        }
-
         val classLoader = plugin::class.java.classLoader
 
         if (classLoader is URLClassLoader) {
             classLoader.close()
         }
+
+        System.gc()
     }
 
     override fun createProxyFactory(plugin: EcoPlugin) =

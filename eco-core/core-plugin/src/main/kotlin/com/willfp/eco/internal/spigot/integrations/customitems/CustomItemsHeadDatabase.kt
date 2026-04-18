@@ -24,7 +24,7 @@ class CustomItemsHeadDatabase(
     }
 
     override fun registerProvider() {
-        Items.registerItemProvider(provider)
+        Items.registerItemProvider(HeadDBProvider())
     }
 
     override fun getPluginName(): String {

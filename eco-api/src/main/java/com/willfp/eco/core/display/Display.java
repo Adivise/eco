@@ -4,17 +4,16 @@ import com.willfp.eco.core.Eco;
 import com.willfp.eco.core.fast.FastItemStack;
 import com.willfp.eco.core.integrations.guidetection.GUIDetectionManager;
 import com.willfp.eco.util.NamespacedKeyUtils;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.TextComponent;
 import org.bukkit.NamespacedKey;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.IdentityHashMap;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
@@ -60,7 +59,7 @@ public final class Display {
      */
     public static ItemStack display(@NotNull final ItemStack itemStack,
                                     @Nullable final Player player) {
-        Map<String, Object[]> pluginVarArgs = new IdentityHashMap<>(4);
+        Map<String, Object[]> pluginVarArgs = new HashMap<>();
 
         for (List<DisplayModule> modules : REGISTERED_MODULES.values()) {
             for (DisplayModule module : modules) {
@@ -77,7 +76,8 @@ public final class Display {
         }
 
         ItemStack original = itemStack.clone();
-        boolean inInventory = false;
+        Inventory inventory = player == null ? null : player.getOpenInventory().getTopInventory();
+        boolean inInventory = inventory != null && inventory.contains(original);
         boolean inGui = player != null && GUIDetectionManager.hasGUIOpen(player);
 
         DisplayProperties properties = new DisplayProperties(
@@ -135,20 +135,16 @@ public final class Display {
      * @return The ItemStack.
      */
     public static ItemStack revert(@NotNull final ItemStack itemStack) {
-        if (!itemStack.hasItemMeta()) {
-            return itemStack;
-        }
-
         if (Display.isFinalized(itemStack)) {
             Display.unfinalize(itemStack);
         }
 
         FastItemStack fast = FastItemStack.wrap(itemStack);
 
-        List<Component> lore = new ArrayList<>(fast.getLoreComponents());
+        List<String> lore = fast.getLore();
 
-        if (!lore.isEmpty() && lore.removeIf(Display::isDisplayLine)) {
-            fast.setLoreComponents(lore);
+        if (!lore.isEmpty() && lore.removeIf(line -> line.startsWith(Display.PREFIX))) {
+            fast.setLore(lore);
         }
 
         for (List<DisplayModule> modules : REGISTERED_MODULES.values()) {
@@ -158,14 +154,6 @@ public final class Display {
         }
 
         return itemStack;
-    }
-
-    private static boolean isDisplayLine(@NotNull final Component line) {
-        // Display lines are tagged by prepending the "§z" PREFIX to their text content. Display
-        // modules only ever add legacy-safe lines, so we can identify them by inspecting the
-        // TextComponent content directly without round-tripping through legacy serialization
-        // (which would discard sprite/font/hover content on non-display lines we must preserve).
-        return line instanceof TextComponent textComponent && textComponent.content().startsWith(PREFIX);
     }
 
     /**
