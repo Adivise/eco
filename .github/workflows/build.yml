@@ -78,6 +78,7 @@ jobs:
           REL_NAME: ${{ steps.sync.outputs.release_name }}
           TAG_NAME: ${{ steps.sync.outputs.tag_name }}
           UP_SHA: ${{ steps.sync.outputs.upstream_sha }}
+          VERSION: ${{ steps.sync.outputs.gradle_version }}
         run: |
           if [ -z "${DISCORD_WEBHOOK_URL:-}" ]; then
             echo "DISCORD_WEBHOOK_URL secret not set; skipping Discord."
@@ -85,19 +86,22 @@ jobs:
           fi
           rel_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"
           jq -n \
-            --arg title "eco — ${REL_NAME}" \
+            --arg title "eco Updated — v${REL_NAME}" \
             --arg url "$rel_url" \
             --arg tag "$TAG_NAME" \
             --arg sha "$UP_SHA" \
             --arg rep "$GITHUB_REPOSITORY" \
+            --arg ver "$VERSION" \
+            --arg dl_url "https://github.com/" + $rep + "/releases/download/" + $tag + "/eco-" + $ver + "-all.jar" \
             '{
               embeds: [{
                 title: $title,
                 url: $url,
-                color: 5814783,
+                color: 585858,
                 fields: [
                   { name: "Tag", value: $tag, inline: true },
-                  { name: "Upstream SHA", value: $sha, inline: false }
+                  { name: "Upstream SHA", value: ("`" + $sha + "`"), inline: false },
+                  { name: "Direct DL", value: ("[`" + "Click Me" + "](" + $dl_url + ")"), inline: false }
                 ],
                 footer: { text: ("GitHub Actions · " + $rep) }
               }]
