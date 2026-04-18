@@ -90,7 +90,7 @@ jobs:
           dl_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/eco-${VERSION}-all.jar"
           
           # Create JSON payload
-          payload=$(jq -n \
+          payload=$(jq -cn \
             --arg plugin_name "eco" \
             --arg version "$VERSION" \
             --arg tag "$TAG_NAME" \
