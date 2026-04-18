@@ -28,3 +28,5 @@ gradle-app.setting
 
 # Claude
 .claude/settings.local.json
+build_yml_history_files
+fetch-build-history.ps1
