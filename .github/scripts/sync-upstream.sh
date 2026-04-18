@@ -48,7 +48,7 @@ if [ -z "$LATEST_TAG" ]; then
 fi
 echo "upstream_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
 
-NEW_SHA="$(git rev-parse "refs/tags/${LATEST_TAG}")"
+NEW_SHA="$(git ls-remote --refs --tags upstream "refs/tags/${LATEST_TAG}" | awk '{print $1}')"
 echo "upstream_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
 
 SYNC_CONTENT="$(git show "origin/${DEFAULT_BRANCH}:.upstream-sync" 2>/dev/null || true)"
