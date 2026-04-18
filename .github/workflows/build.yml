@@ -30,12 +30,19 @@ jobs:
           LATEST_TAG=$(git ls-remote --refs --tags upstream | awk -F/ '{print $3}' | sort -V | tail -n1)
           echo "Latest upstream tag: $LATEST_TAG"
           
-          # Check if we already have a release for this tag
-          if git ls-remote --tags origin "refs/tags/$LATEST_TAG" | grep -q .; then
-            echo "Release for $LATEST_TAG already exists. Skipping."
+          # Check if a stable release already exists for this tag
+          RELEASE_INFO=$(gh release view "$LATEST_TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null || echo "NOT_FOUND")
+          
+          if [ "$RELEASE_INFO" = "false" ]; then
+            echo "Stable release for $LATEST_TAG already exists. Skipping."
             echo "run_build=false" >> $GITHUB_OUTPUT
           else
-            echo "New tag detected: $LATEST_TAG"
+            if [ "$RELEASE_INFO" = "true" ]; then
+              echo "A pre-release exists for $LATEST_TAG, but we need a Stable one."
+            else
+              echo "No release found for $LATEST_TAG."
+            fi
+            
             echo "run_build=true" >> $GITHUB_OUTPUT
             echo "tag_name=$LATEST_TAG" >> $GITHUB_OUTPUT
             

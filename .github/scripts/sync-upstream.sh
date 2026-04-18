@@ -146,16 +146,16 @@ if ! git ls-remote --tags upstream "refs/tags/v*" | grep -q .; then
 fi
 
 if [ "$PV" != "$OLD_VER" ] || [ -z "$OLD_SHA" ]; then
-  TAG_NAME="${TAG_PREFIX}${PV}"
+  TAG_NAME="${TAG_PREFIX}${PV}-dev"
   # Delete the tag from origin in case it's an inherited tag from the upstream fork.
   # This allows the first build of any version to be "clean".
   git push origin ":refs/tags/${TAG_NAME}" 2>/dev/null || true
-  RELEASE_NAME="${PV} (Auto Build)"
+  RELEASE_NAME="${PV} (Dev Build)"
   KIND="auto"
 else
   NEXT_R="$(next_rebuild_suffix "$PV" "$TAG_PREFIX")"
-  TAG_NAME="${TAG_PREFIX}${PV}-rebuild-${NEXT_R}"
-  RELEASE_NAME="${PV} (Rebuild-${NEXT_R})"
+  TAG_NAME="${TAG_PREFIX}${PV}-dev-rebuild-${NEXT_R}"
+  RELEASE_NAME="${PV} (Dev Rebuild-${NEXT_R})"
   KIND="rebuild"
 fi
 
