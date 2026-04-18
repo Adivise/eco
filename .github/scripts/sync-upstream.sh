@@ -41,14 +41,14 @@ if [ -z "$DEFAULT_BRANCH" ]; then
 fi
 echo "default_branch=$DEFAULT_BRANCH" >> "$GITHUB_OUTPUT"
 
-LATEST_TAG=$(git ls-remote --refs --tags upstream | awk -F/ '{print $3}' | sort -V | tail -n1)
-if [ -z "$LATEST_TAG" ]; then
-  echo "Could not resolve upstream tag."
+UPSTREAM_DEFAULT="$(git ls-remote --symref upstream HEAD | awk '/^ref:/ {sub(/^refs\/heads\//, "", $2); print $2; exit}')"
+if [ -z "${UPSTREAM_DEFAULT}" ]; then
+  echo "Could not detect upstream default branch."
   exit 1
 fi
-echo "upstream_tag=$LATEST_TAG" >> "$GITHUB_OUTPUT"
+echo "upstream_default=$UPSTREAM_DEFAULT" >> "$GITHUB_OUTPUT"
 
-NEW_SHA="$(git ls-remote --refs --tags upstream "refs/tags/${LATEST_TAG}" | awk '{print $1}')"
+NEW_SHA="$(git rev-parse "upstream/${UPSTREAM_DEFAULT}")"
 echo "upstream_sha=$NEW_SHA" >> "$GITHUB_OUTPUT"
 
 SYNC_CONTENT="$(git show "origin/${DEFAULT_BRANCH}:.upstream-sync" 2>/dev/null || true)"
