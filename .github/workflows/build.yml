@@ -101,7 +101,25 @@ jobs:
           if [ -z "${NOTIFY_API_URL:-}" ]; then exit 0; fi
           rel_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"
           dl_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/eco-${VERSION}-all.jar"
-          payload=$(jq -cn --arg plugin_name "eco [STABLE]" --arg version "$VERSION" --arg tag "$TAG_NAME" --arg upstream_sha "$UP_SHA" --arg release_url "$rel_url" --arg download_url "$dl_url" --arg repository "$GITHUB_REPOSITORY" '{plugin_name: $plugin_name, version: $version, tag: $tag, upstream_sha: $upstream_sha, release_url: $release_url, download_url: $download_url, repository: $repository}')
+          payload=$(jq -cn \
+            --arg plugin_name "eco" \
+            --arg status "stable" \
+            --arg version "$VERSION" \
+            --arg tag "$TAG_NAME" \
+            --arg upstream_sha "$UP_SHA" \
+            --arg release_url "$rel_url" \
+            --arg download_url "$dl_url" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            '{
+              plugin_name: $plugin_name,
+              status: $status,
+              version: $version,
+              tag: $tag,
+              upstream_sha: $upstream_sha,
+              release_url: $release_url,
+              download_url: $download_url,
+              repository: $repository
+            }')
           signature=$(echo -n "$payload" | openssl dgst -sha256 -hmac "$NOTIFY_API_KEY" | sed 's/^.*= //')
           echo "$payload" | curl -fsS -X POST -H "Content-Type: application/json" -H "x-api-signature: $signature" -d @- "$NOTIFY_API_URL"
 
@@ -176,6 +194,24 @@ jobs:
           if [ -z "${NOTIFY_API_URL:-}" ]; then exit 0; fi
           rel_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"
           dl_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/eco-${VERSION}-all.jar"
-          payload=$(jq -cn --arg plugin_name "eco [DEV]" --arg version "$VERSION" --arg tag "$TAG_NAME" --arg upstream_sha "$UP_SHA" --arg release_url "$rel_url" --arg download_url "$dl_url" --arg repository "$GITHUB_REPOSITORY" '{plugin_name: $plugin_name, version: $version, tag: $tag, upstream_sha: $upstream_sha, release_url: $release_url, download_url: $download_url, repository: $repository}')
+          payload=$(jq -cn \
+            --arg plugin_name "eco" \
+            --arg status "dev" \
+            --arg version "$VERSION" \
+            --arg tag "$TAG_NAME" \
+            --arg upstream_sha "$UP_SHA" \
+            --arg release_url "$rel_url" \
+            --arg download_url "$dl_url" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            '{
+              plugin_name: $plugin_name,
+              status: $status,
+              version: $version,
+              tag: $tag,
+              upstream_sha: $upstream_sha,
+              release_url: $release_url,
+              download_url: $download_url,
+              repository: $repository
+            }')
           signature=$(echo -n "$payload" | openssl dgst -sha256 -hmac "$NOTIFY_API_KEY" | sed 's/^.*= //')
           echo "$payload" | curl -fsS -X POST -H "Content-Type: application/json" -H "x-api-signature: $signature" -d @- "$NOTIFY_API_URL"
