@@ -10,17 +10,17 @@ UPSTREAM_URL="${UPSTREAM_URL:-https://github.com/Auxilor/eco.git}"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git config user.name "github-actions[bot]"
 git config push.followTags false
-git remote add upstream "$UPSTREAM_URL" 2>/dev/null || true
-git fetch origin --no-tags
-git remote set-head origin -a 2>/dev/null || true
-git fetch upstream --tags
-
 if [ "${GITHUB_ACTIONS:-}" = "true" ]; then
   while IFS= read -r t; do
     [ -z "$t" ] && continue
     git tag -d "$t" 2>/dev/null || true
   done < <(git tag -l)
 fi
+
+git remote add upstream "$UPSTREAM_URL" 2>/dev/null || true
+git fetch origin --no-tags
+git remote set-head origin -a 2>/dev/null || true
+git fetch upstream --tags --force
 
 DEFAULT_BRANCH=""
 origin_head_ref="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null || true)"
