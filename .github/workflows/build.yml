@@ -9,6 +9,9 @@ concurrency:
   group: auto-build-${{ github.repository }}
   cancel-in-progress: false
 
+env:
+  PLUGIN_NAME: eco
+
 jobs:
   stable-release:
     runs-on: ubuntu-latest
@@ -23,37 +26,23 @@ jobs:
       - name: Resolve latest upstream tag
         id: check
         run: |
-          git remote add upstream https://github.com/Auxilor/eco.git || true
+          git remote add upstream https://github.com/Auxilor/${{ env.PLUGIN_NAME }}.git || true
           git fetch upstream --tags
           
-          # Get latest tag name
-          LATEST_TAG=$(git ls-remote --refs --tags upstream | awk -F/ '{print $3}' | sort -V | tail -n1)
+          LATEST_TAG=$(git ls-remote --refs --tags upstream | awk -F/ '{print $3}' | grep -E '^[0-9]|v[0-9]' | sort -V | tail -n1)
           echo "Latest upstream tag: $LATEST_TAG"
           
-          # Check if a stable release already exists for this tag
           RELEASE_INFO=$(gh release view "$LATEST_TAG" --json isPrerelease --jq .isPrerelease 2>/dev/null || echo "NOT_FOUND")
           
           if [ "$RELEASE_INFO" = "false" ]; then
             echo "Stable release for $LATEST_TAG already exists. Skipping."
             echo "run_build=false" >> $GITHUB_OUTPUT
           else
-            if [ "$RELEASE_INFO" = "true" ]; then
-              echo "A pre-release exists for $LATEST_TAG, but we need a Stable one."
-            else
-              echo "No release found for $LATEST_TAG."
-            fi
-            
             echo "run_build=true" >> $GITHUB_OUTPUT
             echo "tag_name=$LATEST_TAG" >> $GITHUB_OUTPUT
-            
-            # Checkout that specific tag
             git checkout "tags/$LATEST_TAG"
-            
-            # Get version from gradle.properties
             VERSION=$(grep -E '^version[[:space:]]*=' gradle.properties | head -1 | sed 's/^[^=]*=[[:space:]]*//;s/[[:space:]]*$//;s/#.*//')
             echo "version=$VERSION" >> $GITHUB_OUTPUT
-            
-            # Get current SHA
             SHA=$(git rev-parse HEAD)
             echo "sha=$SHA" >> $GITHUB_OUTPUT
           fi
@@ -70,21 +59,37 @@ jobs:
         uses: gradle/actions/setup-gradle@v3
 
       - name: Build
+        id: build
         if: steps.check.outputs.run_build == 'true'
-        run: ./gradlew clean shadowJar --no-daemon
+        run: |
+          # Try building the checked-out tag
+          if ./gradlew clean build shadowJar --no-daemon; then
+            echo "fallback=false" >> $GITHUB_OUTPUT
+            echo "version=${{ steps.check.outputs.version }}" >> $GITHUB_OUTPUT
+          else
+            echo "Stable build for tag ${{ steps.check.outputs.tag_name }} failed. Falling back to master branch."
+            git checkout master
+            ./gradlew clean build shadowJar --no-daemon
+            VERSION=$(grep -E '^version[[:space:]]*=' gradle.properties | head -1 | sed 's/^[^=]*=[[:space:]]*//;s/[[:space:]]*$//;s/#.*//')
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "fallback=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create Stable Release
         if: steps.check.outputs.run_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.check.outputs.tag_name }}
-          name: ${{ steps.check.outputs.version }} (Stable)
+          name: ${{ steps.build.outputs.version }} (Stable Build)
           files: build/libs/*-all.jar
           prerelease: false
           make_latest: true
           body: |
-            ## [STABLE] eco — v${{ steps.check.outputs.version }}
+            ## [STABLE] ${{ env.PLUGIN_NAME }} — v${{ steps.build.outputs.version }} ${{ steps.build.outputs.fallback == 'true' && '(Fallback Build)' || '' }}
             Auto-generated stable build from upstream tag `${{ steps.check.outputs.tag_name }}`.
+            ${{ steps.build.outputs.fallback == 'true' && '> The build for the original tag failed. This release was generated using the latest development code as a fallback.' || '' }}
+
+            **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -93,16 +98,15 @@ jobs:
         env:
           NOTIFY_API_URL: ${{ secrets.NOTIFY_API_URL }}
           NOTIFY_API_KEY: ${{ secrets.NOTIFY_API_KEY }}
-          REL_NAME: "${{ steps.check.outputs.version }} [STABLE]"
           TAG_NAME: ${{ steps.check.outputs.tag_name }}
-          VERSION: ${{ steps.check.outputs.version }}
+          VERSION: ${{ steps.build.outputs.version }}
           UP_SHA: ${{ steps.check.outputs.sha }}
         run: |
           if [ -z "${NOTIFY_API_URL:-}" ]; then exit 0; fi
           rel_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"
-          dl_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/eco-${VERSION}-all.jar"
+          dl_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/${{ env.PLUGIN_NAME }}-${VERSION}-all.jar"
           payload=$(jq -cn \
-            --arg plugin_name "eco" \
+            --arg plugin_name "${{ env.PLUGIN_NAME }}" \
             --arg status "stable" \
             --arg version "$VERSION" \
             --arg tag "$TAG_NAME" \
@@ -137,7 +141,7 @@ jobs:
       - name: Sync from upstream (Dev)
         id: sync
         env:
-          UPSTREAM_URL: https://github.com/Auxilor/eco.git
+          UPSTREAM_URL: https://github.com/Auxilor/${{ env.PLUGIN_NAME }}.git
         run: bash .github/scripts/sync-upstream.sh
 
       - name: Set up JDK 21
@@ -153,7 +157,7 @@ jobs:
 
       - name: Build
         if: steps.sync.outputs.run_build == 'true'
-        run: ./gradlew clean shadowJar --no-daemon
+        run: ./gradlew clean build shadowJar --no-daemon
 
       - name: Commit sync and push
         id: publish
@@ -169,15 +173,16 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.sync.outputs.tag_name }}
-          name: ${{ steps.sync.outputs.release_name }} (Dev)
+          name: ${{ steps.sync.outputs.release_name }}
           target_commitish: ${{ steps.publish.outputs.head_sha }}
           files: build/libs/*-all.jar
           prerelease: true
           make_latest: false
           body: |
-            ## [DEV] eco — v${{ steps.sync.outputs.gradle_version }}
+            ## [DEV] ${{ env.PLUGIN_NAME }} — v${{ steps.sync.outputs.gradle_version }}
             Auto-generated development build from upstream master @ `${{ steps.sync.outputs.upstream_sha }}`.
-            **Note:** This is an unstable build for testing.
+
+            **Workflow Run:** [${{ github.run_id }}](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -186,16 +191,15 @@ jobs:
         env:
           NOTIFY_API_URL: ${{ secrets.NOTIFY_API_URL }}
           NOTIFY_API_KEY: ${{ secrets.NOTIFY_API_KEY }}
-          REL_NAME: "${{ steps.sync.outputs.release_name }} [DEV]"
           TAG_NAME: ${{ steps.sync.outputs.tag_name }}
           VERSION: ${{ steps.sync.outputs.gradle_version }}
           UP_SHA: ${{ steps.sync.outputs.upstream_sha }}
         run: |
           if [ -z "${NOTIFY_API_URL:-}" ]; then exit 0; fi
           rel_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/releases/tag/${TAG_NAME}"
-          dl_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/eco-${VERSION}-all.jar"
+          dl_url="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG_NAME}/${{ env.PLUGIN_NAME }}-${VERSION}-all.jar"
           payload=$(jq -cn \
-            --arg plugin_name "eco" \
+            --arg plugin_name "${{ env.PLUGIN_NAME }}" \
             --arg status "dev" \
             --arg version "$VERSION" \
             --arg tag "$TAG_NAME" \
