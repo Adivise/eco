@@ -27,7 +27,7 @@ jobs:
         id: check
         run: |
           git remote add upstream https://github.com/Auxilor/${{ env.PLUGIN_NAME }}.git || true
-          git fetch upstream --tags
+          git fetch upstream --tags --force
           
           LATEST_TAG=$(git ls-remote --refs --tags upstream | awk -F/ '{print $3}' | grep -E '^[0-9]|v[0-9]' | sort -V | tail -n1)
           echo "Latest upstream tag: $LATEST_TAG"
