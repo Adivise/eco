@@ -10,18 +10,6 @@ import com.google.gson.JsonSyntaxException;
 import com.willfp.eco.core.Eco;
 import com.willfp.eco.core.integrations.placeholder.PlaceholderManager;
 import com.willfp.eco.core.placeholder.context.PlaceholderContext;
-import net.kyori.adventure.text.Component;
-import net.kyori.adventure.text.JoinConfiguration;
-import net.kyori.adventure.text.TextComponent;
-import net.kyori.adventure.text.format.TextDecoration;
-import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
-import net.kyori.adventure.text.minimessage.MiniMessage;
-import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
-import net.md_5.bungee.api.ChatColor;
-import org.bukkit.entity.Player;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
-
 import java.awt.Color;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -31,6 +19,16 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.JoinConfiguration;
+import net.kyori.adventure.text.TextComponent;
+import net.kyori.adventure.text.format.TextDecoration;
+import net.kyori.adventure.text.serializer.gson.GsonComponentSerializer;
+import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
+import net.md_5.bungee.api.ChatColor;
+import org.bukkit.entity.Player;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
  * Utilities / API methods for strings.
@@ -67,26 +65,6 @@ public final class StringUtils {
             .useUnusualXRepeatedCharacterHexFormat()
             .hexColors()
             .build();
-
-    /**
-     * MiniMessage instance for Component features legacy §-text cannot represent
-     * (sprite, font, translate, hover, click, insertion, ...).
-     */
-    private static final MiniMessage MINI_MESSAGE = MiniMessage.miniMessage();
-
-    /**
-     * MiniMessage tags whose semantics can't survive a legacy round-trip. When
-     * {@link #toComponent(String)} sees one of these it routes the string through
-     * MiniMessage so the feature actually renders instead of appearing as literal
-     * tag text; plain legacy input (no recognised tags) uses the legacy
-     * deserializer unchanged. {@link #toLegacy(Component)} mirrors this by
-     * emitting MiniMessage output for any Component that carries one of these
-     * features, so a Component → String → Component round-trip preserves them.
-     */
-    private static final Pattern MINIMESSAGE_ONLY_TAGS = Pattern.compile(
-            "<(sprite|font|translate|lang|tr|hover|click|insertion|keybind|key|nbt|score|selector|sel|shadow_color|shadow|newline|br)(:[^>]*)?>",
-            Pattern.CASE_INSENSITIVE
-    );
 
     /**
      * GSON serializer.
@@ -618,64 +596,24 @@ public final class StringUtils {
 
     /**
      * Convert legacy (bukkit) text to Component.
-     * <p>
-     * Input containing a MiniMessage tag that legacy can't express (sprite, font,
-     * translate, hover, click, insertion, ...) is parsed via MiniMessage so the
-     * feature renders; plain legacy text is deserialized as legacy as before.
      *
      * @param legacy The legacy text.
      * @return The component.
      */
     @NotNull
     public static Component toComponent(@Nullable final String legacy) {
-        return LEGACY_TO_COMPONENT.get(legacy == null ? "" : legacy, input -> {
-            if (MINIMESSAGE_ONLY_TAGS.matcher(input).find()) {
-                try {
-                    return MINI_MESSAGE.deserialize(input);
-                } catch (RuntimeException ignored) {
-                    return LEGACY_COMPONENT_SERIALIZER.deserialize(input);
-                }
-            }
-            return LEGACY_COMPONENT_SERIALIZER.deserialize(input);
-        });
+        return LEGACY_TO_COMPONENT.get(legacy == null ? "" : legacy, LEGACY_COMPONENT_SERIALIZER::deserialize);
     }
 
     /**
      * Convert Component to legacy (bukkit) text.
-     * <p>
-     * Components carrying features legacy can't represent are serialized via
-     * MiniMessage so {@link #toComponent(String)} can round-trip them back.
      *
      * @param component The component.
-     * @return The legacy text, or a MiniMessage string for non-legacy components.
+     * @return The legacy text.
      */
     @NotNull
     public static String toLegacy(@NotNull final Component component) {
-        return COMPONENT_TO_LEGACY.get(component, it -> {
-            if (isLegacySafe(it)) {
-                return LEGACY_COMPONENT_SERIALIZER.serialize(it);
-            }
-            return MINI_MESSAGE.serialize(it);
-        });
-    }
-
-    private static boolean isLegacySafe(@NotNull final Component component) {
-        if (!(component instanceof TextComponent)) {
-            return false;
-        }
-        var style = component.style();
-        if (style.hoverEvent() != null
-                || style.clickEvent() != null
-                || style.insertion() != null
-                || style.font() != null) {
-            return false;
-        }
-        for (Component child : component.children()) {
-            if (!isLegacySafe(child)) {
-                return false;
-            }
-        }
-        return true;
+        return COMPONENT_TO_LEGACY.get(component, LEGACY_COMPONENT_SERIALIZER::serialize);
     }
 
     /**
@@ -963,6 +901,34 @@ public final class StringUtils {
      */
     public static int getMargin(@NotNull final String input) {
         return input.indexOf(input.trim());
+    }
+
+    /**
+     * Convert a string to title case.
+     *
+     * @param string The string to convert.
+     * @return The title-cased string.
+     */
+    @NotNull
+    public static String toTitleCase(@NotNull final String string) {
+        if (string.isEmpty()) {
+            return string;
+        }
+        String[] words = string.split(" ", -1);
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < words.length; i++) {
+            String word = words[i];
+            if (!word.isEmpty()) {
+                result.append(Character.toUpperCase(word.charAt(0)));
+                if (word.length() > 1) {
+                    result.append(word.substring(1).toLowerCase());
+                }
+            }
+            if (i < words.length - 1) {
+                result.append(' ');
+            }
+        }
+        return result.toString();
     }
 
     /**
