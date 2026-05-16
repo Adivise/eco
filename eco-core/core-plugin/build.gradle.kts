@@ -1,14 +1,75 @@
 group = "com.willfp"
 version = rootProject.version
 
+val bStatsVersion = "v3.2.1"
+val bStatsTargetPackage = "com.willfp.eco.libs.bstats"
+val bStatsGeneratedDir = layout.buildDirectory.dir("generated/sources/bstats")
+
+val vendorBStats by tasks.registering {
+    group = "vendor"
+    description = "Vendors bStats $bStatsVersion source under $bStatsTargetPackage"
+
+    inputs.property("bStatsVersion", bStatsVersion)
+    outputs.dir(bStatsGeneratedDir)
+
+    doLast {
+        val attribution = """
+            /*
+             * Sourced from bStats (https://bstats.org), MIT License.
+             * https://github.com/Bastian/bStats-Metrics
+             * Vendored under $bStatsTargetPackage to avoid classpath conflicts.
+             */
+        """.trimIndent() + "\n"
+
+        val cloneDir = temporaryDir.resolve("bstats-metrics")
+        cloneDir.deleteRecursively()
+
+        val clone = ProcessBuilder(
+            "git", "clone", "--depth", "1", "--branch", bStatsVersion,
+            "https://github.com/Bastian/bStats-Metrics.git",
+            cloneDir.absolutePath
+        ).redirectErrorStream(true).start()
+        val cloneOutput = clone.inputStream.bufferedReader().readText()
+        check(clone.waitFor() == 0) { "Failed to clone bStats-Metrics at $bStatsVersion:\n$cloneOutput" }
+
+        val outDir = bStatsGeneratedDir.get().asFile
+        outDir.deleteRecursively()
+
+        listOf("base", "bukkit").forEach { module ->
+            val javaRoot = cloneDir.resolve("$module/src/main/java")
+            val bStatsRoot = javaRoot.resolve("org/bstats")
+            bStatsRoot.walkTopDown()
+                .filter { it.isFile && it.extension == "java" }
+                .forEach { file ->
+                    val rel = file.relativeTo(bStatsRoot)
+                    val outFile = outDir.resolve("com/willfp/eco/libs/bstats/$rel")
+                    outFile.parentFile.mkdirs()
+                    outFile.writeText(
+                        attribution + file.readText().replace("org.bstats", bStatsTargetPackage)
+                    )
+                }
+        }
+
+        cloneDir.deleteRecursively()
+    }
+}
+
+sourceSets.main {
+    java.srcDir(bStatsGeneratedDir)
+}
+
+tasks.compileJava { dependsOn(vendorBStats) }
+tasks.compileKotlin { dependsOn(vendorBStats) }
+tasks.sourcesJar { dependsOn(vendorBStats) }
+
 dependencies {
     compileOnly(project(":eco-core:core-backend"))
 
     // Libraries (provided at runtime via Paper library loader)
     compileOnly("com.mysql:mysql-connector-j:9.6.0")
     compileOnly("org.mariadb.jdbc:mariadb-java-client:2.7.12")
-    compileOnly("org.jetbrains.exposed:exposed-core:1.2.0")
-    compileOnly("org.jetbrains.exposed:exposed-jdbc:1.2.0")
+    implementation("org.jetbrains.exposed:exposed-core:1.2.0")
+    implementation("org.jetbrains.exposed:exposed-jdbc:1.2.0")
     compileOnly("com.zaxxer:HikariCP:7.0.2")
     compileOnly("net.kyori:adventure-platform-bukkit:4.4.1")
     compileOnly("org.mongodb:mongodb-driver-kotlin-coroutine:5.6.2")
@@ -73,6 +134,7 @@ dependencies {
 tasks {
     shadowJar {
         minimize {
+            exclude(dependency("org.jetbrains.exposed:.*:.*"))
             exclude(dependency("com.willfp:ModelEngineBridge:.*"))
         }
     }
